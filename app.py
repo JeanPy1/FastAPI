@@ -15,7 +15,10 @@ app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4321"],
+    allow_origins=[ 
+        "http://localhost:4321",
+        "https://evoruna.com",
+        "https://www.evoruna.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
