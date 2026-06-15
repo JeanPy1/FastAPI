@@ -13,7 +13,7 @@ DB_USER = os.getenv("PGUSER")
 DB_PASSWORD = os.getenv("PGPASSWORD")
 
 
-
+print(DB_HOST)
 
 
 
