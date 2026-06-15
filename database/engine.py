@@ -12,12 +12,22 @@ DB_NAME = os.getenv("PGDATABASE")
 DB_USER = os.getenv("PGUSER")
 DB_PASSWORD = os.getenv("PGPASSWORD")
 
+
+
+
+
+
+
 DATABASE_URL = (
     f"postgresql+psycopg://"
     f"{DB_USER}:{DB_PASSWORD}"
     f"@{DB_HOST}:{DB_PORT}"
     f"/{DB_NAME}"
 )
+
+print(DATABASE_URL)
+
+raise Exception("STOP")
 
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL no configurada")
