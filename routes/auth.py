@@ -16,6 +16,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 @router.get("/me")
 def me(access_token: str | None = Cookie(default=None), session: Session = Depends(get_session)):
 
+    print(access_token)
     if not access_token:
         raise HTTPException(status_code=401, detail="no autenticado")
     
