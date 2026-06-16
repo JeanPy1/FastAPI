@@ -3,15 +3,13 @@ from sqlmodel import Session, select
 from database.session import get_session
 from schemas.auth import Login, Register, ForgotPassword, ResetPassword
 from models.user import User
-from security.jwt import create_access_token, decode_token, create_reset_token, decode_reset_token, create_verify_email_token
+from security.jwt import create_access_token, decode_token, create_reset_token, decode_reset_token, create_verify_email_token, decode_verify_email_token
 from security.password import hash_password, verify_password
 from mail.send import send_reset_email, send_verify_email
 from jose import JWTError
 from os import getenv
 
-
 router = APIRouter(prefix="/auth", tags=["Auth"])
-
 
 @router.get("/me")
 def me(access_token: str | None = Cookie(default=None), session: Session = Depends(get_session)):
@@ -72,7 +70,25 @@ def register(data: Register, background_tasks: BackgroundTasks, session: Session
 
     return {"message": "Se envió el correo de verificación"}
 
+@router.get("/verify-email")
+def verify_email(token: str, session: Session = Depends(get_session)):
 
+    payload = decode_verify_email_token(token)
+
+    if not payload:
+        raise HTTPException(status_code=400, detail="Token inválido o expirado")
+
+    existing_user = session.exec(select(User).where(User.email == payload["email"])).first()
+
+    if existing_user:
+        raise HTTPException(status_code=409, detail="El correo ya fue verificado")
+
+    user = User(name=payload["name"], email=payload["email"], password_hash=payload["password_hash"])
+
+    session.add(user)
+    session.commit()
+
+    return {"message": "Cuenta verificada correctamente"}
 
 
 @router.post("/forgot-password")
@@ -91,7 +107,6 @@ def forgot_password(data: ForgotPassword, background_tasks: BackgroundTasks, ses
 
     return {"message": "Si el correo existe, se envió un enlace de recuperación"}
 
-
 @router.get("/validate-reset-token")
 def validate_reset_token(token: str):
 
@@ -106,7 +121,6 @@ def validate_reset_token(token: str):
     except JWTError:
         raise HTTPException(status_code=400, detail="Token inválido o expirado")
     
-
 @router.post("/reset-password")
 def reset_password(data: ResetPassword, session: Session = Depends(get_session)):
 
