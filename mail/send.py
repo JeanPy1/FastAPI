@@ -1,28 +1,30 @@
-from fastapi_mail import FastMail, MessageSchema
-from mail.config import mail_config
+import resend
+from mail.config import RESEND_API_KEY, MAIL_FROM
 
-async def send_reset_email(email: str, reset_link: str):
+resend.api_key = RESEND_API_KEY
 
-    message = MessageSchema(
-        subject= "Recuperar contraseña",
-        recipients= [email],
-        body= f"""
-            Hola,
 
-            Recibimos una solicitud para cambiar tu contraseña.
+def send_reset_email(email: str, reset_link: str):
 
-            Haz clic aquí:
+    resend.Emails.send({
 
-            {reset_link}
+        "from": MAIL_FROM,
+        "to": email,
+        "subject": "Recuperar contraseña",
+        "text": f"""
+Hola,
 
-            Este enlace expirará en 30 minutos.
+Recibimos una solicitud para cambiar tu contraseña.
 
-            Si no solicitaste este cambio, ignora este correo.
-            """,
+Haz clic en el siguiente enlace:
 
-        subtype= "plain"
-    )
+{reset_link}
 
-    fm = FastMail(mail_config)
+Este enlace expirará en 30 minutos.
 
-    await fm.send_message(message)
+Si no solicitaste este cambio, puedes ignorar este correo.
+
+Equipo de Evoruna
+"""
+
+    })
