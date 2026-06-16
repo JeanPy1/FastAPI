@@ -47,6 +47,8 @@ def login(data: Login, response: Response, session: Session = Depends(get_sessio
 
     response.set_cookie(key="access_token", value=token, httponly=True, samesite="none", secure=True, max_age=60 * 60 * 24)
 
+    print(token)
+
     return {"message": "Login correcto"}
 
 
