@@ -129,7 +129,8 @@ def reset_password(data: ResetPassword, session: Session = Depends(get_session))
 @router.post("/logout")
 def logout(response: Response):
 
-    response.delete_cookie("access_token")
+    response.delete_cookie(key="access_token", path="/")
+
     return {"message": "Logout correcto"}
 
 
