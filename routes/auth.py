@@ -3,9 +3,9 @@ from sqlmodel import Session, select
 from database.session import get_session
 from schemas.auth import Login, Register, ForgotPassword, ResetPassword
 from models.user import User
-from security.jwt import create_access_token, decode_token, create_reset_token, decode_reset_token
+from security.jwt import create_access_token, decode_token, create_reset_token, decode_reset_token, create_verify_email_token
 from security.password import hash_password, verify_password
-from mail.send import send_reset_email
+from mail.send import send_reset_email, send_verify_email
 from jose import JWTError
 from os import getenv
 
@@ -54,19 +54,25 @@ def login(data: Login, response: Response, session: Session = Depends(get_sessio
 
 
 @router.post("/register")
-def register(data: Register, session: Session = Depends(get_session)):
+def register(data: Register, background_tasks: BackgroundTasks, session: Session = Depends(get_session)):
 
     existing_user = session.exec(select(User).where(User.email == data.email)).first()
 
     if existing_user:
         raise HTTPException(status_code=409, detail="El correo ya existe")       
     
-    user = User(name=data.name, email=data.email, password_hash=hash_password(data.password))
+    token = create_verify_email_token(name=data.name, email=data.email, password_hash=hash_password(data.password))
 
-    session.add(user)
-    session.commit()
+    verify_link = (
+        f"{getenv('FRONTEND_URL')}"
+        f"/verify-email?token={token}"
+    )
 
-    return {"message": "Usuario creado correctamente"}
+    background_tasks.add_task(send_verify_email, data.email, verify_link)   
+
+    return {"message": "Se envió el correo de verificación"}
+
+
 
 
 @router.post("/forgot-password")
