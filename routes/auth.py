@@ -43,7 +43,7 @@ def login(data: Login, response: Response, session: Session = Depends(get_sessio
 
     token = create_access_token(user.id)
 
-    response.set_cookie(key="access_token", value=token, httponly=True, samesite="none", secure=True, max_age=60 * 60 * 24)
+    response.set_cookie(key="access_token", path="/", value=token, httponly=True,secure=True,  samesite="none", max_age=60 * 60 * 24)
 
     return {"message": "Login correcto"}
 
@@ -146,7 +146,7 @@ def reset_password(data: ResetPassword, session: Session = Depends(get_session))
 @router.post("/logout")
 def logout(response: Response):
 
-    response.delete_cookie(key="access_token", path="/", samesite="none", secure=True)
+    response.delete_cookie(key="access_token", path="/", secure=True,  samesite="none")
 
     return {"message": "Logout correcto"}
 
