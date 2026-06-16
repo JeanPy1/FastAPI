@@ -13,8 +13,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 @router.get("/me")
 def me(access_token: str | None = Cookie(default=None), session: Session = Depends(get_session)):
-
-    print(access_token)
+   
     if not access_token:
         raise HTTPException(status_code=401, detail="no autenticado")
     
@@ -45,8 +44,6 @@ def login(data: Login, response: Response, session: Session = Depends(get_sessio
     token = create_access_token(user.id)
 
     response.set_cookie(key="access_token", value=token, httponly=True, samesite="none", secure=True, max_age=60 * 60 * 24)
-
-    print(token)
 
     return {"message": "Login correcto"}
 
