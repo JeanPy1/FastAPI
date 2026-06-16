@@ -27,7 +27,6 @@ DATABASE_URL = (
 
 print(DATABASE_URL)
 
-raise Exception("STOP")
 
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL no configurada")
