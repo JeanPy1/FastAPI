@@ -30,6 +30,7 @@ def me(access_token: str | None = Cookie(default=None), session: Session = Depen
     return {"id": user.id, "name": user.name, "email": user.email}
 
 
+
 @router.post("/login")
 def login(data: Login, response: Response, session: Session = Depends(get_session)):
 
@@ -40,12 +41,16 @@ def login(data: Login, response: Response, session: Session = Depends(get_sessio
 
     if not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+    
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Debes verificar tu correo antes de iniciar sesión")
 
     token = create_access_token(user.id)
 
     response.set_cookie(key="access_token", path="/", value=token, httponly=True,secure=True,  samesite="none", max_age=60 * 60 * 24)
 
-    return {"message": "Login correcto"}
+    return {"message": "Inicio de sesión correcto"}
+
 
 
 @router.post("/register")
@@ -56,8 +61,15 @@ def register(data: Register, background_tasks: BackgroundTasks, session: Session
     if existing_user:
         raise HTTPException(status_code=409, detail="El correo ya existe")       
     
-    token = create_verify_email_token(name=data.name, email=data.email, password_hash=hash_password(data.password))
+    password_hash = hash_password(data.password)
 
+    token, jti = create_verify_email_token(name=data.name, email=data.email, password_hash=password_hash)
+
+    user = User(name=data.name, email=data.email, password_hash=password_hash, is_active=False, verify_jti=jti)
+
+    session.add(user)
+    session.commit()
+    
     verify_link = (
         f"{getenv('FRONTEND_URL')}"
         f"/verify-email?token={token}"
@@ -65,7 +77,7 @@ def register(data: Register, background_tasks: BackgroundTasks, session: Session
 
     background_tasks.add_task(send_verify_email, data.email, verify_link)   
 
-    return {"message": "Se envió el correo de verificación"}
+    return {"message": "Hemos enviado un correo de verificación"}
 
 @router.get("/verify-email")
 def verify_email(token: str, session: Session = Depends(get_session)):
@@ -75,12 +87,19 @@ def verify_email(token: str, session: Session = Depends(get_session)):
     if not payload:
         raise HTTPException(status_code=400, detail="Token inválido o expirado")
 
-    existing_user = session.exec(select(User).where(User.email == payload["email"])).first()
+    user = session.exec(select(User).where(User.email == payload["sub"])).first()
 
-    if existing_user:
-        raise HTTPException(status_code=409, detail="El correo ya fue verificado")
-
-    user = User(name=payload["name"], email=payload["email"], password_hash=payload["password_hash"])
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    if user.is_active:
+        raise HTTPException(status_code=409, detail="La cuenta ya fue verificada")
+    
+    if user.verify_jti != payload["jti"]:
+        raise HTTPException(status_code=400, detail="Este enlace ya no es valido")
+    
+    user.is_active = True
+    user.verify_jti = None    
 
     session.add(user)
     session.commit()
@@ -88,13 +107,21 @@ def verify_email(token: str, session: Session = Depends(get_session)):
     return {"message": "Cuenta verificada correctamente"}
 
 
+
 @router.post("/forgot-password")
 def forgot_password(data: ForgotPassword, background_tasks: BackgroundTasks, session: Session = Depends(get_session)):
 
-    user = session.exec(select(User).where(User.email == data.email)).first()
-    
-    if user:
-        token = create_reset_token(user.id)
+    user = session.exec(select(User).where(User.email == data.email)).first()   
+
+    if user and user.is_active:        
+
+        token, jti = create_reset_token(user.id)
+
+        user.verify_jti = jti
+
+        session.add(user)
+        session.commit()       
+
         reset_link = (
             f"{getenv('FRONTEND_URL')}"
             f"/reset?token={token}"
@@ -105,42 +132,59 @@ def forgot_password(data: ForgotPassword, background_tasks: BackgroundTasks, ses
     return {"message": "Si el correo existe, se envió un enlace de recuperación"}
 
 @router.get("/validate-reset-token")
-def validate_reset_token(token: str):
+def validate_reset_token(token: str, session: Session = Depends(get_session)):
 
     try:
-        user_id = decode_reset_token(token)  
+        data = decode_reset_token(token)  
 
-        if not user_id:
-            raise HTTPException(status_code=400, detail="Token inválido")
+        if not data:
+            raise HTTPException(status_code=400, detail="invalid_token")
+        
+        user = session.get(User, data["user_id"])
+
+        if not user:
+            raise HTTPException(status_code=404, detail="user_not_found")
+        
+        if user.verify_jti is None:
+            raise HTTPException(status_code=400, detail="token_used")
+
+        if user.verify_jti != data["jti"]:
+            raise HTTPException(status_code=400, detail="token_replaced")
       
         return {"valid": True}
 
     except JWTError:
-        raise HTTPException(status_code=400, detail="Token inválido o expirado")
+        raise HTTPException(status_code=400, detail="token_expired")
     
 @router.post("/reset-password")
 def reset_password(data: ResetPassword, session: Session = Depends(get_session)):
 
     try:
-        user_id = decode_reset_token(data.token)       
+        token_data = decode_reset_token(data.token)       
 
-        if not user_id:
+        if not token_data:
             raise HTTPException(status_code=400, detail="Token inválido")
 
     except JWTError:
         raise HTTPException(status_code=400, detail="Token inválido o expirado")
    
-    user = session.get(User, user_id)
+    user = session.get(User, token_data["user_id"])
 
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    if user.verify_jti != token_data["jti"]:
+        raise HTTPException(status_code=400, detail="Este enlace ya no es válido")
 
     user.password_hash = hash_password(data.new_password)
+
+    user.verify_jti = None
 
     session.add(user)
     session.commit()
 
     return {"message": "Contraseña actualizada"}
+
 
 
 @router.post("/logout")

@@ -2,6 +2,7 @@ import os
 from datetime import datetime, timedelta, UTC
 from jose import jwt, JWTError
 from dotenv import load_dotenv
+from uuid import uuid4
 
 load_dotenv()
 
@@ -34,26 +35,27 @@ def decode_token(token: str):
   
 def create_reset_token(user_id: int):
 
-    payload = {"sub": str(user_id), "type": "password_reset", "exp": datetime.now(UTC) + timedelta(minutes=30)}
+    jti = str(uuid4())
+    payload = {"sub": str(user_id), "jti": jti, "type": "password_reset", "exp": datetime.now(UTC) + timedelta(minutes=30)}
     token = jwt.encode(payload, SECRET, algorithm=ALGORITHM)
 
-    return token
+    return token, jti
 
 def decode_reset_token(token: str):       
     
     try:
-
         payload = jwt.decode(token, SECRET, algorithms=[ALGORITHM]) 
 
         if payload.get("type") != "password_reset":          
             return None
 
-        user_id = payload.get("sub")        
+        user_id = payload.get("sub")     
+        jti = payload.get("jti")   
 
-        if not user_id:
+        if not user_id or not jti:
             return None
         
-        return int(user_id)
+        return {"user_id": int(user_id), "jti": jti}
               
     except JWTError:        
         return None   
@@ -61,15 +63,15 @@ def decode_reset_token(token: str):
 
 def create_verify_email_token(name: str, email: str, password_hash: str):
 
-    payload = {"name": name, "email": email, "password_hash": password_hash, "type": "verify_email", "exp": datetime.now(UTC) + timedelta(minutes=30)}
+    jti = str(uuid4())
+    payload = {"sub": email, "name": name, "password_hash": password_hash, "jti": jti, "type": "verify_email", "exp": datetime.now(UTC) + timedelta(minutes=30)}
     token = jwt.encode(payload, SECRET, algorithm=ALGORITHM)
 
-    return token
+    return token, jti
 
 def decode_verify_email_token(token: str):
 
     try:
-
         payload = jwt.decode(token, SECRET, algorithms=[ALGORITHM])
 
         if payload.get("type") != "verify_email":
@@ -79,3 +81,4 @@ def decode_verify_email_token(token: str):
 
     except JWTError:
         return None
+

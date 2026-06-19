@@ -7,4 +7,4 @@ class User(SQLModel, table=True):
     email: str = Field(unique=True, index=True)
     password_hash: str
     is_active: bool = Field(default=True)
-
+    verify_jti: str | None = Field(default=None)
